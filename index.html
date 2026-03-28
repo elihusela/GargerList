@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>רשימות קפה</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: #f5f0eb;
+      color: #2c2c2c;
+      min-height: 100vh;
+      direction: rtl;
+    }
+
+    header {
+      background: #3b2a1a;
+      color: #f5f0eb;
+      padding: 20px 24px;
+      font-size: 1.4rem;
+      font-weight: bold;
+    }
+
+    #home-screen, #checklist-screen {
+      padding: 24px 20px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* HOME */
+
+    .checklist-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .checklist-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 22px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.15s;
+    }
+
+    .checklist-card:active {
+      background: #ede7df;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .card-progress {
+      font-size: 0.85rem;
+      color: #888;
+      white-space: nowrap;
+      margin-right: 12px;
+    }
+
+    .card-progress.done {
+      color: #5a9a5a;
+      font-weight: 600;
+    }
+
+    /* CHECKLIST */
+
+    .back-btn {
+      background: none;
+      border: none;
+      font-size: 1rem;
+      color: #3b2a1a;
+      cursor: pointer;
+      padding: 6px 0;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+    }
+
+    .back-btn:hover {
+      text-decoration: underline;
+    }
+
+    .checklist-title {
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+
+    .items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .item-row {
+      background: #fff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .item-row:active {
+      background: #ede7df;
+    }
+
+    .item-row.checked {
+      background: #eaf4ea;
+    }
+
+    .item-row input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      accent-color: #5a9a5a;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .item-label {
+      font-size: 1rem;
+      flex: 1;
+      user-select: none;
+    }
+
+    .item-row.checked .item-label {
+      text-decoration: line-through;
+      color: #999;
+    }
+
+    .reset-btn {
+      width: 100%;
+      padding: 14px;
+      background: #3b2a1a;
+      color: #f5f0eb;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+
+    .reset-btn:hover {
+      background: #5a3e28;
+    }
+
+    .all-done-msg {
+      text-align: center;
+      color: #5a9a5a;
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .loading {
+      color: #888;
+      padding: 20px 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>☕ רשימות קפה</header>
+
+<div id="home-screen">
+  <div class="checklist-cards" id="cards-container">
+    <div class="loading">טוען רשימות...</div>
+  </div>
+</div>
+
+<div id="checklist-screen" style="display:none;">
+  <button class="back-btn" onclick="goHome()">→ חזרה לרשימות</button>
+  <div class="checklist-title" id="cl-title"></div>
+  <div class="items-list" id="cl-items"></div>
+  <div class="all-done-msg" id="all-done" style="display:none;">✔ הכל הושלם!</div>
+  <button class="reset-btn" onclick="resetCurrent()">איפוס רשימה</button>
+</div>
+
+<script>
+  // Loaded from manifest.json + checklists/{name}/items.txt
+  let CHECKLISTS = []; // [{ id, name, items: [] }]
+  let currentId = null;
+
+  async function loadChecklists() {
+    const res = await fetch('manifest.json');
+    const names = await res.json();
+
+    CHECKLISTS = await Promise.all(names.map(async (name) => {
+      const txtRes = await fetch(`checklists/${encodeURIComponent(name)}/items.txt`);
+      const text = await txtRes.text();
+      const items = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      return { id: name, name, items };
+    }));
+
+    renderHome();
+  }
+
+  function getState(id) {
+    const raw = localStorage.getItem('cl_' + id);
+    return raw ? JSON.parse(raw) : {};
+  }
+
+  function saveState(id, state) {
+    localStorage.setItem('cl_' + id, JSON.stringify(state));
+  }
+
+  function getChecklist(id) {
+    return CHECKLISTS.find(c => c.id === id);
+  }
+
+  function renderHome() {
+    const container = document.getElementById('cards-container');
+    container.innerHTML = '';
+    CHECKLISTS.forEach(cl => {
+      const state = getState(cl.id);
+      const done = cl.items.filter((_, i) => state[i]).length;
+      const total = cl.items.length;
+      const isDone = done === total && total > 0;
+
+      const card = document.createElement('div');
+      card.className = 'checklist-card';
+      card.innerHTML = `
+        <div class="card-title">${cl.name}</div>
+        <div class="card-progress ${isDone ? 'done' : ''}">${done}/${total}</div>
+      `;
+      card.onclick = () => openChecklist(cl.id);
+      container.appendChild(card);
+    });
+  }
+
+  function openChecklist(id) {
+    currentId = id;
+    const cl = getChecklist(id);
+    const state = getState(id);
+
+    document.getElementById('cl-title').textContent = cl.name;
+    const itemsEl = document.getElementById('cl-items');
+    itemsEl.innerHTML = '';
+
+    cl.items.forEach((item, i) => {
+      const checked = !!state[i];
+      const row = document.createElement('div');
+      row.className = 'item-row' + (checked ? ' checked' : '');
+      row.innerHTML = `
+        <input type="checkbox" id="item-${i}" ${checked ? 'checked' : ''} />
+        <label class="item-label" for="item-${i}">${item}</label>
+      `;
+      row.onclick = (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        toggleItem(i);
+      };
+      row.querySelector('input').onchange = () => toggleItem(i);
+      itemsEl.appendChild(row);
+    });
+
+    updateAllDone(id);
+
+    document.getElementById('home-screen').style.display = 'none';
+    document.getElementById('checklist-screen').style.display = 'block';
+  }
+
+  function toggleItem(index) {
+    const state = getState(currentId);
+    state[index] = !state[index];
+    saveState(currentId, state);
+
+    const row = document.getElementById('cl-items').children[index];
+    const cb = row.querySelector('input');
+    cb.checked = state[index];
+    row.classList.toggle('checked', state[index]);
+
+    updateAllDone(currentId);
+  }
+
+  function updateAllDone(id) {
+    const cl = getChecklist(id);
+    const state = getState(id);
+    const done = cl.items.filter((_, i) => state[i]).length;
+    document.getElementById('all-done').style.display = done === cl.items.length ? 'block' : 'none';
+  }
+
+  function resetCurrent() {
+    saveState(currentId, {});
+    openChecklist(currentId);
+  }
+
+  function goHome() {
+    currentId = null;
+    document.getElementById('checklist-screen').style.display = 'none';
+    document.getElementById('home-screen').style.display = 'block';
+    renderHome();
+  }
+
+  loadChecklists();
+</script>
+</body>
+</html>
