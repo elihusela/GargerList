@@ -177,6 +177,61 @@
       padding: 20px 0;
       text-align: center;
     }
+
+    .note-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.75rem;
+      color: #aaa;
+      padding: 0 2px;
+      flex-shrink: 0;
+      transition: transform 0.2s, color 0.15s;
+      line-height: 1;
+    }
+
+    .note-toggle:hover {
+      color: #666;
+    }
+
+    .note-toggle.open {
+      transform: rotate(90deg);
+      color: #666;
+    }
+
+    .item-notes {
+      display: none;
+      background: #f7f3ef;
+      border-radius: 0 0 10px 10px;
+      padding: 10px 16px 12px 16px;
+      font-size: 0.88rem;
+      color: #666;
+      line-height: 1.6;
+      margin-top: -4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .item-notes.open {
+      display: block;
+    }
+
+    .item-notes p {
+      margin: 0;
+      padding: 2px 0;
+    }
+
+    .item-wrapper {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .item-wrapper .item-row {
+      border-radius: 10px;
+    }
+
+    .item-wrapper.has-notes.expanded .item-row {
+      border-radius: 10px 10px 0 0;
+    }
   </style>
 </head>
 <body>
@@ -209,7 +264,15 @@
     CHECKLISTS = await Promise.all(names.map(async (name) => {
       const txtRes = await fetch(`checklists/${encodeURIComponent(name)}/items.txt`);
       const text = await txtRes.text();
-      const items = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const items = [];
+      for (const line of text.split('\n')) {
+        if (line.trim().length === 0) continue;
+        if (/^\s/.test(line)) {
+          if (items.length > 0) items[items.length - 1].notes.push(line.trim());
+        } else {
+          items.push({ text: line.trim(), notes: [] });
+        }
+      }
       return { id: name, name, items };
     }));
 
@@ -235,7 +298,7 @@
     CHECKLISTS.forEach(cl => {
       const state = getState(cl.id);
       const done = cl.items.filter((_, i) => state[i]).length;
-      const total = cl.items.length;
+      const total = cl.items.length; // notes don't count
       const isDone = done === total && total > 0;
 
       const card = document.createElement('div');
@@ -260,18 +323,44 @@
 
     cl.items.forEach((item, i) => {
       const checked = !!state[i];
+      const hasNotes = item.notes.length > 0;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'item-wrapper' + (hasNotes ? ' has-notes' : '');
+
       const row = document.createElement('div');
       row.className = 'item-row' + (checked ? ' checked' : '');
       row.innerHTML = `
         <input type="checkbox" id="item-${i}" ${checked ? 'checked' : ''} />
-        <label class="item-label" for="item-${i}">${item}</label>
+        <label class="item-label" for="item-${i}">${item.text}</label>
+        ${hasNotes ? `<button class="note-toggle" aria-label="הצג הערות">›</button>` : ''}
       `;
       row.onclick = (e) => {
         if (e.target.tagName === 'INPUT') return;
+        if (e.target.classList.contains('note-toggle')) return;
         toggleItem(i);
       };
       row.querySelector('input').onchange = () => toggleItem(i);
-      itemsEl.appendChild(row);
+
+      if (hasNotes) {
+        const notesEl = document.createElement('div');
+        notesEl.className = 'item-notes';
+        notesEl.innerHTML = item.notes.map(n => `<p>${n}</p>`).join('');
+
+        row.querySelector('.note-toggle').onclick = (e) => {
+          e.stopPropagation();
+          const open = notesEl.classList.toggle('open');
+          e.target.classList.toggle('open', open);
+          wrapper.classList.toggle('expanded', open);
+        };
+
+        wrapper.appendChild(row);
+        wrapper.appendChild(notesEl);
+      } else {
+        wrapper.appendChild(row);
+      }
+
+      itemsEl.appendChild(wrapper);
     });
 
     updateAllDone(id);
@@ -285,7 +374,8 @@
     state[index] = !state[index];
     saveState(currentId, state);
 
-    const row = document.getElementById('cl-items').children[index];
+    const wrapper = document.getElementById('cl-items').children[index];
+    const row = wrapper.querySelector('.item-row');
     const cb = row.querySelector('input');
     cb.checked = state[index];
     row.classList.toggle('checked', state[index]);
