@@ -267,8 +267,8 @@
       const items = [];
       for (const line of text.split('\n')) {
         if (line.trim().length === 0) continue;
-        if (/^- /.test(line)) {
-          if (items.length > 0) items[items.length - 1].notes.push(line.slice(2).trim());
+        if (/^\s*- /.test(line)) {
+          if (items.length > 0) items[items.length - 1].notes.push(line.replace(/^\s*- /, '').trim());
         } else {
           items.push({ text: line.trim(), notes: [] });
         }
