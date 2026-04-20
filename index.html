@@ -253,7 +253,7 @@
 </div>
 
 <script>
-  // Loaded from manifest.json + checklists/{name}/items.txt
+  // Loaded from manifest.json + checklists/{name}/{name}.txt
   let CHECKLISTS = []; // [{ id, name, items: [] }]
   let currentId = null;
 
@@ -262,7 +262,7 @@
     const names = await res.json();
 
     CHECKLISTS = await Promise.all(names.map(async (name) => {
-      const txtRes = await fetch(`checklists/${encodeURIComponent(name)}/items.txt`);
+      const txtRes = await fetch(`checklists/${encodeURIComponent(name)}/${encodeURIComponent(name)}.txt`);
       const text = await txtRes.text();
       const items = [];
       for (const line of text.split('\n')) {
