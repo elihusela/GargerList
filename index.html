@@ -232,6 +232,24 @@
     .item-wrapper.has-notes.expanded .item-row {
       border-radius: 10px 10px 0 0;
     }
+
+    .item-qty {
+      width: 60px;
+      padding: 4px 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-family: inherit;
+      text-align: center;
+      background: #faf8f6;
+      color: #2c2c2c;
+      flex-shrink: 0;
+    }
+
+    .item-qty:focus {
+      outline: none;
+      border-color: #3b2a1a;
+    }
   </style>
 </head>
 <body>
@@ -288,6 +306,15 @@
     localStorage.setItem('cl_' + id, JSON.stringify(state));
   }
 
+  function getQty(id) {
+    const raw = localStorage.getItem('qty_' + id);
+    return raw ? JSON.parse(raw) : {};
+  }
+
+  function saveQty(id, qty) {
+    localStorage.setItem('qty_' + id, JSON.stringify(qty));
+  }
+
   function getChecklist(id) {
     return CHECKLISTS.find(c => c.id === id);
   }
@@ -316,6 +343,8 @@
     currentId = id;
     const cl = getChecklist(id);
     const state = getState(id);
+    const qty = getQty(id);
+    const isInventory = id === 'מלאים';
 
     document.getElementById('cl-title').textContent = cl.name;
     const itemsEl = document.getElementById('cl-items');
@@ -333,6 +362,7 @@
       row.innerHTML = `
         <input type="checkbox" id="item-${i}" ${checked ? 'checked' : ''} />
         <label class="item-label" for="item-${i}">${item.text}</label>
+        ${isInventory ? `<input type="number" class="item-qty" min="0" value="${qty[i] ?? ''}" placeholder="כמות" />` : ''}
         ${hasNotes ? `<button class="note-toggle" aria-label="הצג הערות">›</button>` : ''}
       `;
       row.onclick = (e) => {
@@ -340,7 +370,16 @@
         if (e.target.classList.contains('note-toggle')) return;
         toggleItem(i);
       };
-      row.querySelector('input').onchange = () => toggleItem(i);
+      row.querySelector('input[type="checkbox"]').onchange = () => toggleItem(i);
+
+      if (isInventory) {
+        const qtyInput = row.querySelector('.item-qty');
+        qtyInput.oninput = () => {
+          const q = getQty(currentId);
+          q[i] = qtyInput.value;
+          saveQty(currentId, q);
+        };
+      }
 
       if (hasNotes) {
         const notesEl = document.createElement('div');
@@ -392,6 +431,7 @@
 
   function resetCurrent() {
     saveState(currentId, {});
+    saveQty(currentId, {});
     openChecklist(currentId);
   }
 
